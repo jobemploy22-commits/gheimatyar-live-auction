@@ -5,6 +5,17 @@ const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:tr
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
 function message(t,bad=false){$('#message').textContent=t;$('#message').className='live-alert '+(bad?'live-error':'live-success');}
+// Signup/login tabs work even when the external Supabase library fails to load.
+function setAuthMode(signup){
+ state.signup=signup;
+ $('#tabLogin').classList.toggle('active',!signup);
+ $('#tabSignup').classList.toggle('active',signup);
+ $('#extraSignup').classList.toggle('live-hidden',!signup);
+ $('#authSubmit').textContent=signup?'ساخت حساب':'ورود';
+}
+$('#tabLogin').addEventListener('click',()=>setAuthMode(false));
+$('#tabSignup').addEventListener('click',()=>setAuthMode(true));
+setAuthMode(true);
 const config=window.GHEIMATYAR_SUPABASE||{};
 if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.url||'')||!config.key||!window.supabase){
  message('زیرساخت نسخه واقعی هنوز متصل نشده است. پس از ایجاد پروژه Supabase، آدرس و کلید عمومی در supabase-config.js تنظیم می‌شود.',true);$('#authSubmit').disabled=true;return;
@@ -87,8 +98,8 @@ async function openOffers(r,el){
   el.appendChild(form);
  }
 }
-$('#tabLogin').onclick=()=>{state.signup=false;$('#tabLogin').classList.add('active');$('#tabSignup').classList.remove('active');$('#extraSignup').classList.add('live-hidden');$('#authSubmit').textContent='ورود';};
-$('#tabSignup').onclick=()=>{state.signup=true;$('#tabSignup').classList.add('active');$('#tabLogin').classList.remove('active');$('#extraSignup').classList.remove('live-hidden');$('#authSubmit').textContent='ساخت حساب';};
+
+
 $('#authForm').onsubmit=async ev=>{
  ev.preventDefault();const email=$('#email').value.trim(),password=$('#password').value;
  const button=$('#authSubmit');button.disabled=true;
@@ -122,6 +133,6 @@ $('#requestForm').onsubmit=async ev=>{
  if(error){message('ثبت درخواست ناموفق بود: '+error.message,true);return;}
  ev.currentTarget.reset();message('درخواست واقعی ثبت شد. فروشندگان عضو می‌توانند برای آن پیشنهاد بدهند.');await loadRequests();
 };
-$('#tabSignup').click();
+
 db.auth.onAuthStateChange(()=>{setTimeout(sessionChanged,0);});sessionChanged();
 })();
