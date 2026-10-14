@@ -202,8 +202,8 @@
     ['#newRequestHero','#newRequestSection','#newRequestBottom','#emptyNewRequest','#mobileNewRequest'].forEach(id=>$(id).addEventListener('click',newRequest));
     $('#heroOffersBtn').addEventListener('click',()=>openRequest('GY-1001'));
     $('#vipBtn').addEventListener('click',showVip);
-    $('#demoLoginBtn').addEventListener('click',showLogin);
-    $('#mobileProfile').addEventListener('click',showLogin);
+    $('#demoLoginBtn').addEventListener('click',()=>location.assign('./live.html'));
+    $('#mobileProfile').addEventListener('click',()=>location.assign('./live.html'));
     $('#notificationsBtn').addEventListener('click',showNotifications);
     $('#mobileNotifications').addEventListener('click',showNotifications);
     $$('[data-close-drawer]').forEach(b=>b.addEventListener('click',closeNotifications));
