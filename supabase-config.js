@@ -1,6 +1,5 @@
-// Public browser connection settings only. Never commit service_role, database passwords, or secret keys.
-// After creating the Supabase project, fill URL and sb_publishable_ key.
+// Public browser configuration. Publishable keys are safe when RLS is enforced.
 window.GHEIMATYAR_SUPABASE = {
-  url: '',
-  key: ''
+  url: 'https://axmkjoscwgvkzrdguiig.supabase.co',
+  key: 'sb_publishable_bmk88T9jILGEW3s2at-Nxw_YkfjrLeH'
 };
