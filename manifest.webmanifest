@@ -1,0 +1,19 @@
+{
+  "name": "قیمت‌یار | مناقصه زنده",
+  "short_name": "قیمت‌یار",
+  "description": "نمایش آزمایشی پلتفرم رقابت قیمت خریدار و فروشنده",
+  "dir": "rtl",
+  "lang": "fa",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f8faff",
+  "theme_color": "#172d8c",
+  "icons": [
+    {
+      "src": "assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
