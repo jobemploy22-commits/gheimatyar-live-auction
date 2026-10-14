@@ -4,6 +4,14 @@ const $=s=>document.querySelector(s);
 const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null};
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
+function friendlyError(err){
+ const code=err?.code||'',raw=String(err?.message||err||'');
+ if(code==='email_not_confirmed'||/email not confirmed/i.test(raw))return 'حساب شما ساخته شده ولی ایمیل هنوز تأیید نشده. صندوق ورودی و پوشه Spam را بررسی کنید؛ سپس از بخش «ورود» استفاده کنید.';
+ if(code==='over_email_send_rate_limit'||/only request this after|rate limit/i.test(raw))return 'درخواست ایمیل زیاد بوده است. کمی صبر کنید و دوباره درخواست ارسال بدهید.';
+ if(/already registered/i.test(raw))return 'این ایمیل قبلاً ثبت شده است. از بخش «ورود» استفاده کنید.';
+ if(/invalid login credentials/i.test(raw))return 'ایمیل یا رمز عبور صحیح نیست، یا حساب هنوز تأیید نشده است.';
+ return raw;
+}
 function message(t,bad=false){$('#message').textContent=t;$('#message').className='live-alert '+(bad?'live-error':'live-success');}
 // Signup/login tabs work even when the external Supabase library fails to load.
 function setAuthMode(signup){
@@ -116,7 +124,15 @@ $('#authForm').onsubmit=async ev=>{
    location.assign('./index.html');return;
   }
   await sessionChanged();
- }catch(err){message(err.message||'اشکال در احراز هویت',true);}finally{button.disabled=false;}
+ }catch(err){message(friendlyError(err),true);}finally{button.disabled=false;}
+};
+const resend=document.createElement('button');resend.type='button';resend.id='resendVerification';resend.className='live-btn live-outline';resend.textContent='ارسال مجدد ایمیل تأیید';resend.style.marginTop='12px';
+$('#authForm').appendChild(resend);
+resend.onclick=async()=>{const email=$('#email').value.trim();if(!email){message('ابتدا ایمیل حساب را وارد کنید.',true);return;}resend.disabled=true;
+try{const {error}=await db.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+location.pathname+'?afterAuth=1'}});
+if(error)throw error;message('اگر این حساب نیاز به تأیید داشته باشد، ایمیل ارسال می‌شود. صندوق ورودی و Spam را بررسی کنید.');}
+catch(err){message(friendlyError(err),true);}
+finally{setTimeout(()=>{resend.disabled=false;},45000);}
 };
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)message(error.message,true);else await sessionChanged();};
 $('#tabAll').onclick=()=>{state.mode='all';$('#tabAll').classList.add('active');$('#tabMine').classList.remove('active');loadRequests();};
