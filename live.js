@@ -1,0 +1,123 @@
+(()=>{
+'use strict';
+const $=s=>document.querySelector(s);
+const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:false,channel:null};
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fa=n=>Number(n).toLocaleString('fa-IR');
+function message(t,bad=false){$('#message').textContent=t;$('#message').className='live-alert '+(bad?'live-error':'live-success');}
+const config=window.GHEIMATYAR_SUPABASE||{};
+if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.url||'')||!config.key||!window.supabase){
+ message('زیرساخت نسخه واقعی هنوز متصل نشده است. پس از ایجاد پروژه Supabase، آدرس و کلید عمومی در supabase-config.js تنظیم می‌شود.',true);$('#authSubmit').disabled=true;return;
+}
+state.client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const db=state.client;
+async function getProfile(){
+ if(!state.user){state.profile=null;return;}
+ const {data,error}=await db.from('market_profiles').select('id,display_name,city,role').eq('id',state.user.id).single();
+ if(error){message('خواندن حساب کاربری ممکن نشد: '+error.message,true);return;}
+ state.profile=data;
+}
+async function sessionChanged(){
+ const {data:{session},error}=await db.auth.getSession();
+ if(error)message(error.message,true);
+ state.user=session?.user||null;
+ await getProfile();
+ $('#authPanel').classList.toggle('live-hidden',!!state.user);
+ $('#marketPanel').classList.toggle('live-hidden',!state.user);
+ $('#logout').classList.toggle('live-hidden',!state.user);
+ $('#identity').textContent=state.profile ? state.profile.display_name+' | '+(state.profile.role==='seller'?'فروشنده':'خریدار') : 'مهمان';
+ $('#buyerComposer').classList.toggle('live-hidden',state.profile?.role!=='buyer');
+ if(state.channel){await db.removeChannel(state.channel);state.channel=null;}
+ if(state.user){
+  await loadRequests();
+  state.channel=db.channel('market-changes-'+state.user.id)
+   .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>loadRequests())
+   .subscribe();
+  message('حساب متصل شد. فهرست از پایگاه داده خوانده می‌شود.');
+ }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
+}
+const categories={digital:'موبایل و دیجیتال',car:'خودرو',gold:'طلا',property:'ملک',construction:'مصالح ساختمانی',service:'خدمات'};
+const due=x=>{const n=new Date(x).getTime()-Date.now();return n<=0?'مهلت تمام شده':Math.ceil(n/86400000)+' روز باقی مانده';};
+async function loadRequests(){
+ if(!state.user)return;
+ let q=db.from('market_requests').select('id,buyer_id,title,category,city,description,budget,deadline,status,created_at').order('created_at',{ascending:false}).limit(80);
+ if(state.mode==='mine'&&state.profile?.role==='buyer') q=q.eq('buyer_id',state.user.id);
+ else q=q.eq('status','open').gt('deadline',new Date().toISOString());
+ const {data,error}=await q;
+ if(error){message('خطای دریافت درخواست‌ها: '+error.message,true);return;}
+ state.requests=data||[];
+ const list=$('#requestList');list.replaceChildren();
+ if(!state.requests.length){list.textContent='فعلاً درخواستی در این بخش وجود ندارد.';return;}
+ for(const r of state.requests){
+  const card=document.createElement('article');card.className='live-card';
+  card.innerHTML='<div class="live-status">'+esc(categories[r.category]||r.category)+' | '+esc(r.city)+' | '+esc(due(r.deadline))+'</div><h3>'+esc(r.title)+'</h3><p>'+esc(r.description)+'</p><p class="live-price">'+fa(r.budget)+' تومان <small class="live-muted">سقف بودجه</small></p><div class="live-actions"></div><div class="offer-area"></div>';
+  const actions=card.querySelector('.live-actions');
+  const btn=document.createElement('button');btn.className='live-btn live-outline';btn.textContent=state.profile?.role==='seller'?'ثبت پیشنهاد':'بررسی پیشنهادهای من';
+  const owner=r.buyer_id===state.user.id;
+  if(state.profile?.role==='seller'||owner){btn.addEventListener('click',()=>openOffers(r,card.querySelector('.offer-area')));actions.appendChild(btn);}
+  if(owner&&r.status==='open'){
+   const close=document.createElement('button');close.className='live-btn live-outline';close.textContent='بستن درخواست';
+   close.onclick=async()=>{if(!confirm('این درخواست بسته شود؟'))return;const {error}=await db.rpc('market_close_request',{p_request_id:r.id});if(error)message(error.message,true);else{message('درخواست بسته شد.');loadRequests();}};actions.appendChild(close);
+  }
+  list.appendChild(card);
+ }
+}
+async function openOffers(r,el){
+ el.replaceChildren();
+ const seller=state.profile?.role==='seller';
+ const {data,error}=await db.from('market_offers').select('id,seller_id,seller_name,seller_city,price,delivery_days,notes,created_at').eq('request_id',r.id).order('price',{ascending:true});
+ if(error){message('دریافت پیشنهادها ناموفق بود: '+error.message,true);return;}
+ const list=document.createElement('div');
+ if(!(data||[]).length){const p=document.createElement('p');p.className='live-muted';p.textContent='هنوز پیشنهادی برای این حساب قابل مشاهده نیست.';list.appendChild(p);}
+ for(const o of data||[]){
+  const row=document.createElement('div');row.className='live-offer';
+  row.innerHTML='<strong>'+esc(o.seller_name)+'</strong> · '+esc(o.seller_city)+' <div class="live-price">'+fa(o.price)+' تومان</div><span class="live-muted">تحویل: '+fa(o.delivery_days)+' روز · '+esc(o.notes)+'</span>';
+  list.appendChild(row);
+ }
+ el.appendChild(list);
+ if(seller&&r.status==='open'&&new Date(r.deadline)>new Date()){
+  if((data||[]).some(x=>x.seller_id===state.user.id)){const p=document.createElement('p');p.textContent='شما قبلاً یک پیشنهاد برای این درخواست ثبت کرده‌اید.';el.appendChild(p);return;}
+  const form=document.createElement('form');form.innerHTML='<h4>پیشنهاد قیمت جدید</h4><label class="live-label">قیمت به تومان</label><input name="price" type="number" min="1000" step="1" required class="live-input"><label class="live-label">تحویل چند روزه</label><input name="days" type="number" min="0" max="180" required class="live-input"><label class="live-label">شرایط پیشنهاد</label><textarea name="notes" maxlength="750" class="live-input"></textarea><button class="live-btn">ارسال پیشنهاد</button>';
+  form.onsubmit=async ev=>{ev.preventDefault();const fd=new FormData(form),price=Number(fd.get('price')),days=Number(fd.get('days'));if(!Number.isSafeInteger(price)||price<1000||price>1e15||!Number.isInteger(days)||days<0||days>180){message('قیمت یا مهلت تحویل معتبر نیست.',true);return;}
+    const b=form.querySelector('button');b.disabled=true;const {error}=await db.from('market_offers').insert({request_id:r.id,seller_id:state.user.id,price,delivery_days:days,notes:String(fd.get('notes')||'').trim()});
+    if(error){b.disabled=false;message('خطا در ثبت پیشنهاد: '+error.message,true);}else{message('پیشنهاد با موفقیت ثبت شد.');await openOffers(r,el);}
+  };
+  el.appendChild(form);
+ }
+}
+$('#tabLogin').onclick=()=>{state.signup=false;$('#tabLogin').classList.add('active');$('#tabSignup').classList.remove('active');$('#extraSignup').classList.add('live-hidden');$('#authSubmit').textContent='ورود';};
+$('#tabSignup').onclick=()=>{state.signup=true;$('#tabSignup').classList.add('active');$('#tabLogin').classList.remove('active');$('#extraSignup').classList.remove('live-hidden');$('#authSubmit').textContent='ساخت حساب';};
+$('#authForm').onsubmit=async ev=>{
+ ev.preventDefault();const email=$('#email').value.trim(),password=$('#password').value;
+ const button=$('#authSubmit');button.disabled=true;
+ try{
+  if(state.signup){
+   const name=$('#displayName').value.trim(),city=$('#accountCity').value.trim(),role=$('#accountRole').value;
+   if(name.length<2||city.length<2){message('نام و شهر را وارد کنید.',true);return;}
+   const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{name,city,role}}});
+   if(error)throw error;
+   message(data.session?'حساب ساخته شد.':'ثبت‌نام انجام شد. لینک تأیید ایمیل را بررسی کنید.');
+  }else{
+   const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;
+  }
+  await sessionChanged();
+ }catch(err){message(err.message||'اشکال در احراز هویت',true);}finally{button.disabled=false;}
+};
+$('#logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)message(error.message,true);else await sessionChanged();};
+$('#tabAll').onclick=()=>{state.mode='all';$('#tabAll').classList.add('active');$('#tabMine').classList.remove('active');loadRequests();};
+$('#tabMine').onclick=()=>{state.mode='mine';$('#tabMine').classList.add('active');$('#tabAll').classList.remove('active');loadRequests();};
+$('#reload').onclick=loadRequests;
+$('#requestForm').onsubmit=async ev=>{
+ ev.preventDefault();if(state.profile?.role!=='buyer'){message('فقط خریدار می‌تواند درخواست ثبت کند.',true);return;}
+ const f=new FormData(ev.currentTarget),budget=Number(f.get('budget'));if(!Number.isSafeInteger(budget)||budget<1000||budget>1e15){message('مبلغ بودجه نامعتبر است.',true);return;}
+ const title=String(f.get('title')||'').trim(),description=String(f.get('description')||'').trim(),city=String(f.get('city')||'').trim();
+ if(title.length<4||description.length<8||city.length<2){message('جزئیات درخواست کافی نیست.',true);return;}
+ const btn=ev.currentTarget.querySelector('button');btn.disabled=true;
+ const {error}=await db.from('market_requests').insert({buyer_id:state.user.id,title,category:f.get('category'),city,description,budget,deadline:new Date(Date.now()+Number(f.get('days'))*86400000).toISOString()});
+ btn.disabled=false;
+ if(error){message('ثبت درخواست ناموفق بود: '+error.message,true);return;}
+ ev.currentTarget.reset();message('درخواست واقعی ثبت شد. فروشندگان عضو می‌توانند برای آن پیشنهاد بدهند.');await loadRequests();
+};
+db.auth.onAuthStateChange(()=>{setTimeout(sessionChanged,0);});sessionChanged();
+})();
