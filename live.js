@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s);
-const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:false,channel:null};
+const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null};
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
 function message(t,bad=false){$('#message').textContent=t;$('#message').className='live-alert '+(bad?'live-error':'live-success');}
@@ -96,7 +96,7 @@ $('#authForm').onsubmit=async ev=>{
   if(state.signup){
    const name=$('#displayName').value.trim(),city=$('#accountCity').value.trim(),role=$('#accountRole').value;
    if(name.length<2||city.length<2){message('نام و شهر را وارد کنید.',true);return;}
-   const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname,data:{name,city,role}}});
+   const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname+'?afterAuth=1',data:{name,city,role}}});
    if(error)throw error;
    message(data.session?'حساب ساخته شد؛ در حال ورود به صفحه اصلی…':'ثبت‌نام انجام شد. لینک تأیید ایمیل را بررسی کنید و سپس وارد شوید.');
    if(data.session){location.assign('./index.html');return;}
@@ -122,5 +122,6 @@ $('#requestForm').onsubmit=async ev=>{
  if(error){message('ثبت درخواست ناموفق بود: '+error.message,true);return;}
  ev.currentTarget.reset();message('درخواست واقعی ثبت شد. فروشندگان عضو می‌توانند برای آن پیشنهاد بدهند.');await loadRequests();
 };
+$('#tabSignup').click();
 db.auth.onAuthStateChange(()=>{setTimeout(sessionChanged,0);});sessionChanged();
 })();
