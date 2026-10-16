@@ -48,7 +48,7 @@ async function sessionChanged(){
  $('#buyerComposer').classList.toggle('live-hidden',state.profile?.role!=='buyer');
  if(state.channel){await db.removeChannel(state.channel);state.channel=null;}
  if(state.user){
-  if(new URLSearchParams(location.search).has('afterAuth')){location.replace('./index.html');return;}
+  if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
   await loadRequests();
   state.channel=db.channel('market-changes-'+state.user.id)
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
@@ -118,10 +118,10 @@ $('#authForm').onsubmit=async ev=>{
    const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname+'?afterAuth=1',data:{name,city,role}}});
    if(error)throw error;
    message(data.session?'حساب ساخته شد؛ در حال ورود به صفحه اصلی…':'ثبت‌نام انجام شد. لینک تأیید ایمیل را بررسی کنید و سپس وارد شوید.');
-   if(data.session){location.assign('./index.html');return;}
+   if(data.session){await sessionChanged();return;}
   }else{
    const {error}=await db.auth.signInWithPassword({email,password});if(error)throw error;
-   location.assign('./index.html');return;
+   await sessionChanged();return;
   }
   await sessionChanged();
  }catch(err){message(friendlyError(err),true);}finally{button.disabled=false;}
