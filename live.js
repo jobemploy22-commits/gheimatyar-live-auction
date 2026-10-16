@@ -1,7 +1,7 @@
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s);
-const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null};
+const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null,recovery:false};
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
 function friendlyError(err){
@@ -41,12 +41,13 @@ async function sessionChanged(){
  if(error)message(error.message,true);
  state.user=session?.user||null;
  await getProfile();
- $('#authPanel').classList.toggle('live-hidden',!!state.user);
- $('#marketPanel').classList.toggle('live-hidden',!state.user);
- $('#logout').classList.toggle('live-hidden',!state.user);
+ $('#authPanel').classList.toggle('live-hidden',!!state.user||state.recovery);
+ $('#marketPanel').classList.toggle('live-hidden',!state.user||state.recovery);
+ $('#logout').classList.toggle('live-hidden',!state.user||state.recovery);
  $('#identity').textContent=state.profile ? state.profile.display_name+' | '+(state.profile.role==='seller'?'فروشنده':'خریدار') : 'مهمان';
  $('#buyerComposer').classList.toggle('live-hidden',state.profile?.role!=='buyer');
  if(state.channel){await db.removeChannel(state.channel);state.channel=null;}
+ if(state.recovery){message('رمز عبور جدید را وارد کنید.');return;}
  if(state.user){
   if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
   await loadRequests();
@@ -150,5 +151,48 @@ $('#requestForm').onsubmit=async ev=>{
  ev.currentTarget.reset();message('درخواست واقعی ثبت شد. فروشندگان عضو می‌توانند برای آن پیشنهاد بدهند.');await loadRequests();
 };
 
-db.auth.onAuthStateChange(()=>{setTimeout(sessionChanged,0);});sessionChanged();
+$('#forgotPassword').onclick=async()=>{
+ const email=$('#email').value.trim();
+ if(!email||!$('#email').checkValidity()){message('ابتدا آدرس ایمیل حساب را به‌درستی وارد کنید.',true);$('#email').focus();return;}
+ const btn=$('#forgotPassword');btn.disabled=true;
+ try{
+  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?reset=1'});
+  if(error)throw error;
+  message('اگر این ایمیل حساب داشته باشد، لینک تغییر رمز ارسال می‌شود. صندوق ورودی و Spam را بررسی کنید.');
+ }catch(err){message(friendlyError(err),true);}
+ finally{btn.disabled=false;}
+};
+function showRecovery(){
+ state.recovery=true;
+ $('#recoveryPanel').classList.remove('live-hidden');
+ $('#authPanel').classList.add('live-hidden');
+ $('#marketPanel').classList.add('live-hidden');
+ $('#logout').classList.add('live-hidden');
+ message('لینک بازیابی معتبر دریافت شد. رمز جدید را انتخاب کنید.');
+}
+$('#recoveryForm').onsubmit=async ev=>{
+ ev.preventDefault();
+ const password=$('#newPassword').value;
+ if(password!==$('#confirmPassword').value){message('تکرار رمز عبور یکسان نیست.',true);return;}
+ const btn=ev.currentTarget.querySelector('button');btn.disabled=true;
+ try{
+  const {error}=await db.auth.updateUser({password});
+  if(error)throw error;
+  state.recovery=false;
+  $('#recoveryPanel').classList.add('live-hidden');
+  history.replaceState(null,'',location.pathname);
+  $('#recoveryForm').reset();
+  await sessionChanged();
+  message('رمز عبور با موفقیت تغییر کرد و وارد حساب شدید.');
+ }catch(err){message(friendlyError(err),true);}
+ finally{btn.disabled=false;}
+};
+db.auth.onAuthStateChange((event)=>{
+ if(event==='PASSWORD_RECOVERY'){showRecovery();return;}
+ setTimeout(sessionChanged,0);
+});
+if(new URLSearchParams(location.search).has('reset')){
+ db.auth.getSession().then(({data})=>{if(data.session)showRecovery();else message('در حال بررسی لینک بازیابی رمز عبور…');});
+}
+sessionChanged();
 })();
