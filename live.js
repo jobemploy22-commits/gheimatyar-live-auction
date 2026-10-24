@@ -70,6 +70,9 @@ async function loadRequests(){
  if(error){message('خطای دریافت درخواست‌ها: '+error.message,true);return;}
  state.requests=data||[];
  const list=$('#requestList');list.replaceChildren();
+ const dash=$('#dashboard');dash.replaceChildren();
+ const summary=[['نقش حساب',state.profile?.role==='seller'?'فروشنده':'خریدار'],['درخواست‌های این بخش',fa(state.requests.length)],['نمایش',state.mode==='mine'?'درخواست‌های من':'درخواست‌های فعال']];
+ for(const [label,value] of summary){const c=document.createElement('div');c.className='live-card';const small=document.createElement('div');small.className='live-muted';small.textContent=label;const strong=document.createElement('div');strong.className='live-subhead';strong.textContent=value;c.append(small,strong);dash.appendChild(c);}
  if(!state.requests.length){list.textContent='فعلاً درخواستی در این بخش وجود ندارد.';return;}
  const term=($('#marketSearch')?.value||'').trim().toLocaleLowerCase('fa');
  const visible=state.requests.filter(r=>!term||[r.title,r.city,r.description,categories[r.category]].some(v=>String(v||'').toLocaleLowerCase('fa').includes(term)));
