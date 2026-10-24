@@ -32,9 +32,10 @@ state.client=window.supabase.createClient(config.url,config.key,{auth:{persistSe
 const db=state.client;
 async function getProfile(){
  if(!state.user){state.profile=null;return;}
- const {data,error}=await db.from('market_profiles').select('id,display_name,city,role').eq('id',state.user.id).single();
+ const {data,error}=await db.from('market_profiles').select('id,display_name,city,role,business_name,business_description,contact_phone').eq('id',state.user.id).single();
  if(error){message('خواندن حساب کاربری ممکن نشد: '+error.message,true);return;}
  state.profile=data;
+ $('#profileName').value=data.display_name||'';$('#profileCity').value=data.city||'';$('#profileBusiness').value=data.business_name||'';$('#profileDescription').value=data.business_description||'';$('#profilePhone').value=data.contact_phone||'';
 }
 async function sessionChanged(){
  const {data:{session},error}=await db.auth.getSession();
@@ -175,6 +176,9 @@ if(error)throw error;message('اگر این حساب نیاز به تأیید د
 catch(err){message(friendlyError(err),true);}
 finally{setTimeout(()=>{resend.disabled=false;},45000);}
 };
+$('#profileToggle').onclick=()=>$('#profileForm').classList.toggle('live-hidden');
+$('#profileForm').onsubmit=async ev=>{ev.preventDefault();const button=ev.currentTarget.querySelector('button[type="submit"]');button.disabled=true;
+try{const {error}=await db.rpc('market_update_my_profile',{p_display_name:$('#profileName').value.trim(),p_city:$('#profileCity').value.trim(),p_business_name:$('#profileBusiness').value.trim(),p_business_description:$('#profileDescription').value.trim(),p_contact_phone:$('#profilePhone').value.trim()});if(error)throw error;await getProfile();$('#profileForm').classList.add('live-hidden');message('پروفایل با موفقیت ذخیره شد.');}catch(err){message('ذخیره پروفایل ناموفق بود: '+friendlyError(err),true);}finally{button.disabled=false;}};
 $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)message(error.message,true);else await sessionChanged();};
 $('#tabAll').onclick=()=>{state.mode='all';$('#tabAll').classList.add('active');$('#tabMine').classList.remove('active');loadRequests();};
 $('#tabMine').onclick=()=>{state.mode='mine';$('#tabMine').classList.add('active');$('#tabAll').classList.remove('active');loadRequests();};
