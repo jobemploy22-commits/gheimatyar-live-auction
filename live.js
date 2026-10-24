@@ -93,10 +93,11 @@ async function openOffers(r,el){
  const {data,error}=await db.from('market_offers').select('id,seller_id,seller_name,seller_city,price,delivery_days,notes,created_at').eq('request_id',r.id).order('price',{ascending:true});
  if(error){message('دریافت پیشنهادها ناموفق بود: '+error.message,true);return;}
  const list=document.createElement('div');
+ if(!seller&&(data||[]).length){const summary=document.createElement('div');summary.className='live-alert live-success';const best=data[0];summary.textContent='بهترین قیمت فعلی: '+fa(best.price)+' تومان از '+fa(data.length)+' پیشنهاد قابل مشاهده. اختلاف با سقف بودجه: '+fa(Math.max(0,Number(r.budget)-Number(best.price)))+' تومان (صرفاً مقایسه قیمت؛ کیفیت و شرایط تحویل را هم بررسی کنید).';el.appendChild(summary);}
  if(!(data||[]).length){const p=document.createElement('p');p.className='live-muted';p.textContent='هنوز پیشنهادی برای این حساب قابل مشاهده نیست.';list.appendChild(p);}
- for(const o of data||[]){
-  const row=document.createElement('div');row.className='live-offer';
-  row.innerHTML='<strong>'+esc(o.seller_name)+'</strong> · '+esc(o.seller_city)+' <div class="live-price">'+fa(o.price)+' تومان</div><span class="live-muted">تحویل: '+fa(o.delivery_days)+' روز · '+esc(o.notes)+'</span>';
+ for(const [i,o] of (data||[]).entries()){
+  const row=document.createElement('div');row.className='live-offer';if(!seller&&i===0){row.style.borderColor='#11b69d';row.style.borderWidth='2px';}
+  row.innerHTML=(!seller&&i===0?'<strong style="color:#07876f">کمترین قیمت پیشنهادی</strong><div></div>':'')+'<strong>'+esc(o.seller_name)+'</strong> · '+esc(o.seller_city)+' <div class="live-price">'+fa(o.price)+' تومان</div><span class="live-muted">تحویل: '+fa(o.delivery_days)+' روز · '+esc(o.notes)+'</span>';
   list.appendChild(row);
  }
  el.appendChild(list);
