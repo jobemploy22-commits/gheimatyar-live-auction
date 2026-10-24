@@ -53,6 +53,7 @@ async function sessionChanged(){
   if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
   await loadRequests();
   await loadNotifications();
+  await loadAdmin();
   state.channel=db.channel('market-changes-'+state.user.id)
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>{loadRequests();loadNotifications();})
@@ -60,6 +61,46 @@ async function sessionChanged(){
   message('حساب متصل شد. فهرست از پایگاه داده خوانده می‌شود.');
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
+async function loadAdmin(){
+ const panel=$('#adminPanel');
+ if(!state.user){panel.classList.add('live-hidden');return;}
+ const {data:allowed,error:authError}=await db.rpc('market_admin_is_admin');
+ if(authError||!allowed){panel.classList.add('live-hidden');return;}
+ panel.classList.remove('live-hidden');
+ const [{data:stats,error:statsError},{data:requests,error:requestsError}]=await Promise.all([db.rpc('market_admin_dashboard'),db.rpc('market_admin_recent_requests')]);
+ if(statsError||requestsError){message('خطا در دریافت اطلاعات مدیریت: '+friendlyError(statsError||requestsError),true);return;}
+ const grid=$('#adminStats');grid.replaceChildren();
+ for(const [label,key] of [['کاربران','users'],['خریداران','buyers'],['فروشندگان','sellers'],['درخواست‌ها','requests'],['درخواست‌های فعال','open_requests'],['پیشنهادها','offers'],['انتخاب برنده','awards']]){
+  const box=document.createElement('div');box.className='live-offer';
+  const heading=document.createElement('div');heading.className='live-muted';heading.textContent=label;
+  const count=document.createElement('strong');count.className='live-subhead';count.textContent=fa(stats?.[key]||0);
+  box.append(heading,count);grid.appendChild(box);
+ }
+ const list=$('#adminRequests');list.replaceChildren();
+ for(const r of requests||[]){
+  const box=document.createElement('div');box.className='live-offer';
+  const heading=document.createElement('strong');heading.textContent=r.title;
+  const info=document.createElement('p');info.className='live-muted';info.textContent=r.city+' | '+r.status+' | '+fa(r.offer_count)+' پیشنهاد';
+  box.append(heading,info);
+  if(r.status==='open'){
+   const btn=document.createElement('button');btn.className='live-btn live-outline';btn.type='button';btn.textContent='بستن با ثبت دلیل';
+   btn.onclick=async()=>{
+    const reason=prompt('دلیل بستن درخواست را بنویسید (حداقل ۱۰ کاراکتر):');
+    if(reason===null)return;
+    if(reason.trim().length<10||reason.trim().length>500){message('دلیل باید بین ۱۰ تا ۵۰۰ کاراکتر باشد.',true);return;}
+    if(!confirm('این درخواست بسته شود؟'))return;
+    btn.disabled=true;
+    const {error}=await db.rpc('market_admin_close_request',{p_request_id:r.id,p_reason:reason.trim()});
+    if(error){btn.disabled=false;message('بستن درخواست ناموفق بود: '+friendlyError(error),true);return;}
+    message('درخواست بسته شد و دلیل در سابقه مدیریت ثبت شد.');
+    await Promise.all([loadAdmin(),loadRequests()]);
+   };box.appendChild(btn);
+  }
+  list.appendChild(box);
+ }
+ if(!requests?.length)list.textContent='درخواستی ثبت نشده است.';
+}
+$('#adminRefresh').onclick=loadAdmin;
 async function loadNotifications(){
  if(!state.user)return;
  const {data,error}=await db.from('market_notifications').select('id,title,body,kind,is_read,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(30);
