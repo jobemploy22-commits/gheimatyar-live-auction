@@ -59,6 +59,7 @@ async function sessionChanged(){
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
 const categories={digital:'موبایل و دیجیتال',car:'خودرو',gold:'طلا',property:'ملک',construction:'مصالح ساختمانی',service:'خدمات'};
+const requestStatus=r=>r.status==='closed'?'بسته‌شده':new Date(r.deadline)<=new Date()?'مهلت تمام‌شده':'فعال';
 const due=x=>{const n=new Date(x).getTime()-Date.now();return n<=0?'مهلت تمام شده':Math.ceil(n/86400000)+' روز باقی مانده';};
 async function loadRequests(){
  if(!state.user)return;
@@ -75,12 +76,12 @@ async function loadRequests(){
  if(!visible.length){list.textContent='درخواستی مطابق جست‌وجوی شما پیدا نشد.';return;}
  for(const r of visible){
   const card=document.createElement('article');card.className='live-card';
-  card.innerHTML='<div class="live-status">'+esc(categories[r.category]||r.category)+' | '+esc(r.city)+' | '+esc(due(r.deadline))+'</div><h3>'+esc(r.title)+'</h3><p>'+esc(r.description)+'</p><p class="live-price">'+fa(r.budget)+' تومان <small class="live-muted">سقف بودجه</small></p><div class="live-actions"></div><div class="offer-area"></div>';
+  card.innerHTML='<div class="live-status">'+esc(categories[r.category]||r.category)+' | '+esc(r.city)+' | وضعیت: '+esc(requestStatus(r))+' | '+esc(due(r.deadline))+'</div><h3>'+esc(r.title)+'</h3><p>'+esc(r.description)+'</p><p class="live-price">'+fa(r.budget)+' تومان <small class="live-muted">سقف بودجه</small></p><div class="live-actions"></div><div class="offer-area"></div>';
   const actions=card.querySelector('.live-actions');
   const btn=document.createElement('button');btn.className='live-btn live-outline';btn.textContent=state.profile?.role==='seller'?'ثبت پیشنهاد':'بررسی پیشنهادهای من';
   const owner=r.buyer_id===state.user.id;
   if(state.profile?.role==='seller'||owner){btn.addEventListener('click',()=>openOffers(r,card.querySelector('.offer-area')));actions.appendChild(btn);}
-  if(owner&&r.status==='open'){
+  if(owner&&r.status==='open'&&new Date(r.deadline)>new Date()){
    const close=document.createElement('button');close.className='live-btn live-outline';close.textContent='بستن درخواست';
    close.onclick=async()=>{if(!confirm('این درخواست بسته شود؟'))return;const {error}=await db.rpc('market_close_request',{p_request_id:r.id});if(error)message(error.message,true);else{message('درخواست بسته شد.');loadRequests();}};actions.appendChild(close);
   }
