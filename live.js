@@ -130,11 +130,16 @@ async function openOffers(r,el){
  const {data,error}=await db.from('market_offers').select('id,seller_id,seller_name,seller_city,price,delivery_days,notes,created_at').eq('request_id',r.id).order('price',{ascending:true});
  if(error){message('دریافت پیشنهادها ناموفق بود: '+error.message,true);return;}
  const list=document.createElement('div');
+ const {data:awards,error:awardError}=await db.rpc('market_get_my_awards');
+ if(awardError){message('دریافت نتیجه انتخاب فروشنده ناموفق بود: '+friendlyError(awardError),true);return;}
+ const awarded=(awards||[]).find(a=>a.request_id===r.id);
+ if(awarded){const status=document.createElement('div');status.className='live-alert live-success';status.textContent='پیشنهاد منتخب ثبت شده: '+awarded.seller_name+' | '+fa(awarded.price)+' تومان | تحویل '+fa(awarded.delivery_days)+' روزه. این انتخاب به معنی پرداخت یا قرارداد قطعی نیست.';el.appendChild(status);}
  if(!seller&&(data||[]).length){const summary=document.createElement('div');summary.className='live-alert live-success';const best=data[0];summary.textContent='بهترین قیمت فعلی: '+fa(best.price)+' تومان از '+fa(data.length)+' پیشنهاد قابل مشاهده. اختلاف با سقف بودجه: '+fa(Math.max(0,Number(r.budget)-Number(best.price)))+' تومان (صرفاً مقایسه قیمت؛ کیفیت و شرایط تحویل را هم بررسی کنید).';el.appendChild(summary);}
  if(!(data||[]).length){const p=document.createElement('p');p.className='live-muted';p.textContent='هنوز پیشنهادی برای این حساب قابل مشاهده نیست.';list.appendChild(p);}
  for(const [i,o] of (data||[]).entries()){
   const row=document.createElement('div');row.className='live-offer';if(!seller&&i===0){row.style.borderColor='#11b69d';row.style.borderWidth='2px';}
   row.innerHTML=(!seller&&i===0?'<strong style="color:#07876f">کمترین قیمت پیشنهادی</strong><div></div>':'')+'<strong>'+esc(o.seller_name)+'</strong> · '+esc(o.seller_city)+' <div class="live-price">'+fa(o.price)+' تومان</div><span class="live-muted">تحویل: '+fa(o.delivery_days)+' روز · '+esc(o.notes)+'</span>';
+  if(!seller&&r.buyer_id===state.user.id&&r.status==='open'&&!awarded){const select=document.createElement('button');select.className='live-btn';select.type='button';select.textContent='انتخاب این پیشنهاد به‌عنوان برنده';select.style.marginTop='10px';select.onclick=async()=>{if(!confirm('با انتخاب این پیشنهاد، درخواست بسته می‌شود. این اقدام قابل بازگشت نیست. تأیید می‌کنید؟'))return;select.disabled=true;const {error}=await db.rpc('market_award_request',{p_request_id:r.id,p_offer_id:o.id});if(error){select.disabled=false;message('انتخاب پیشنهاد ناموفق بود: '+friendlyError(error),true);return;}message('پیشنهاد برنده با موفقیت ثبت شد.');await loadRequests();};row.appendChild(select);}
   list.appendChild(row);
  }
  el.appendChild(list);
