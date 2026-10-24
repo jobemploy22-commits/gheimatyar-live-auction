@@ -85,6 +85,36 @@ async function loadRequests(){
   const owner=r.buyer_id===state.user.id;
   if(state.profile?.role==='seller'||owner){btn.addEventListener('click',()=>openOffers(r,card.querySelector('.offer-area')));actions.appendChild(btn);}
   if(owner&&r.status==='open'&&new Date(r.deadline)>new Date()){
+   const edit=document.createElement('button');edit.className='live-btn live-outline';edit.textContent='ویرایش درخواست (پیش از دریافت پیشنهاد)';
+   edit.onclick=async()=>{
+    const area=card.querySelector('.offer-area');area.replaceChildren();
+    const check=await db.from('market_offers').select('id',{count:'exact',head:true}).eq('request_id',r.id);
+    if(check.error){message('بررسی پیشنهادهای ثبت‌شده ممکن نشد: '+friendlyError(check.error),true);return;}
+    if(check.count>0){message('این درخواست پیشنهاد دریافت کرده و دیگر قابل ویرایش نیست.',true);return;}
+    const form=document.createElement('form');form.className='live-card';
+    const fields=[['title','عنوان درخواست',r.title,110],['city','شهر',r.city,80],['description','جزئیات درخواست',r.description,1500],['budget','سقف بودجه (تومان)',String(r.budget),16]];
+    for(const [name,label,value,max] of fields){
+     const l=document.createElement('label');l.className='live-label';l.textContent=label;
+     const input=name==='description'?document.createElement('textarea'):document.createElement('input');
+     input.className='live-input';input.name=name;input.required=true;input.maxLength=max;input.value=value;
+     if(name==='budget'){input.type='number';input.min='1000';input.max='1000000000000000';input.step='1';}
+     form.append(l,input);
+    }
+    const save=document.createElement('button');save.className='live-btn';save.type='submit';save.textContent='ذخیره تغییرات';form.appendChild(save);
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='live-btn live-outline';cancel.textContent='انصراف';cancel.onclick=()=>area.replaceChildren();form.appendChild(cancel);
+    form.onsubmit=async ev=>{
+     ev.preventDefault();const fd=new FormData(form),title=String(fd.get('title')||'').trim(),city=String(fd.get('city')||'').trim(),description=String(fd.get('description')||'').trim(),budget=Number(fd.get('budget'));
+     if(title.length<4||city.length<2||description.length<8||!Number.isSafeInteger(budget)||budget<1000||budget>1e15){message('اطلاعات درخواست معتبر نیست.',true);return;}
+     save.disabled=true;
+     const {error}=await db.rpc('market_edit_request',{p_request_id:r.id,p_title:title,p_city:city,p_description:description,p_budget:budget});
+     if(error){message('ویرایش انجام نشد: '+friendlyError(error),true);save.disabled=false;return;}
+     message('درخواست با موفقیت ویرایش شد.');await loadRequests();
+    };
+    area.appendChild(form);
+   };
+   actions.appendChild(edit);
+  }
+  if(owner&&r.status==='open'&&new Date(r.deadline)>new Date()){
    const close=document.createElement('button');close.className='live-btn live-outline';close.textContent='بستن درخواست';
    close.onclick=async()=>{if(!confirm('این درخواست بسته شود؟'))return;const {error}=await db.rpc('market_close_request',{p_request_id:r.id});if(error)message(error.message,true);else{message('درخواست بسته شد.');loadRequests();}};actions.appendChild(close);
   }
