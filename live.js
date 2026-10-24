@@ -75,7 +75,9 @@ async function loadRequests(){
  for(const [label,value] of summary){const c=document.createElement('div');c.className='live-card';const small=document.createElement('div');small.className='live-muted';small.textContent=label;const strong=document.createElement('div');strong.className='live-subhead';strong.textContent=value;c.append(small,strong);dash.appendChild(c);}
  if(!state.requests.length){list.textContent='فعلاً درخواستی در این بخش وجود ندارد.';return;}
  const term=($('#marketSearch')?.value||'').trim().toLocaleLowerCase('fa');
- const visible=state.requests.filter(r=>!term||[r.title,r.city,r.description,categories[r.category]].some(v=>String(v||'').toLocaleLowerCase('fa').includes(term)));
+ const category=$('#categoryFilter')?.value||'';
+ const city=($('#cityFilter')?.value||'').trim().toLocaleLowerCase('fa');
+ const visible=state.requests.filter(r=>(!category||r.category===category)&&(!city||String(r.city||'').toLocaleLowerCase('fa').includes(city))&&(!term||[r.title,r.city,r.description,categories[r.category]].some(v=>String(v||'').toLocaleLowerCase('fa').includes(term))));
  if(!visible.length){list.textContent='درخواستی مطابق جست‌وجوی شما پیدا نشد.';return;}
  for(const r of visible){
   const card=document.createElement('article');card.className='live-card';
@@ -178,6 +180,8 @@ $('#tabAll').onclick=()=>{state.mode='all';$('#tabAll').classList.add('active');
 $('#tabMine').onclick=()=>{state.mode='mine';$('#tabMine').classList.add('active');$('#tabAll').classList.remove('active');loadRequests();};
 $('#reload').onclick=loadRequests;
 $('#marketSearch').addEventListener('input',()=>loadRequests());
+$('#categoryFilter').addEventListener('change',()=>loadRequests());
+$('#cityFilter').addEventListener('input',()=>loadRequests());
 $('#requestForm').onsubmit=async ev=>{
  ev.preventDefault();if(state.profile?.role!=='buyer'){message('فقط خریدار می‌تواند درخواست ثبت کند.',true);return;}
  const f=new FormData(ev.currentTarget),budget=Number(f.get('budget'));if(!Number.isSafeInteger(budget)||budget<1000||budget>1e15){message('مبلغ بودجه نامعتبر است.',true);return;}
