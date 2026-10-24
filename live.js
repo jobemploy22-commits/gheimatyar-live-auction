@@ -70,7 +70,10 @@ async function loadRequests(){
  state.requests=data||[];
  const list=$('#requestList');list.replaceChildren();
  if(!state.requests.length){list.textContent='فعلاً درخواستی در این بخش وجود ندارد.';return;}
- for(const r of state.requests){
+ const term=($('#marketSearch')?.value||'').trim().toLocaleLowerCase('fa');
+ const visible=state.requests.filter(r=>!term||[r.title,r.city,r.description,categories[r.category]].some(v=>String(v||'').toLocaleLowerCase('fa').includes(term)));
+ if(!visible.length){list.textContent='درخواستی مطابق جست‌وجوی شما پیدا نشد.';return;}
+ for(const r of visible){
   const card=document.createElement('article');card.className='live-card';
   card.innerHTML='<div class="live-status">'+esc(categories[r.category]||r.category)+' | '+esc(r.city)+' | '+esc(due(r.deadline))+'</div><h3>'+esc(r.title)+'</h3><p>'+esc(r.description)+'</p><p class="live-price">'+fa(r.budget)+' تومان <small class="live-muted">سقف بودجه</small></p><div class="live-actions"></div><div class="offer-area"></div>';
   const actions=card.querySelector('.live-actions');
@@ -139,6 +142,7 @@ $('#logout').onclick=async()=>{const {error}=await db.auth.signOut();if(error)me
 $('#tabAll').onclick=()=>{state.mode='all';$('#tabAll').classList.add('active');$('#tabMine').classList.remove('active');loadRequests();};
 $('#tabMine').onclick=()=>{state.mode='mine';$('#tabMine').classList.add('active');$('#tabAll').classList.remove('active');loadRequests();};
 $('#reload').onclick=loadRequests;
+$('#marketSearch').addEventListener('input',()=>loadRequests());
 $('#requestForm').onsubmit=async ev=>{
  ev.preventDefault();if(state.profile?.role!=='buyer'){message('فقط خریدار می‌تواند درخواست ثبت کند.',true);return;}
  const f=new FormData(ev.currentTarget),budget=Number(f.get('budget'));if(!Number.isSafeInteger(budget)||budget<1000||budget>1e15){message('مبلغ بودجه نامعتبر است.',true);return;}
