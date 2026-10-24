@@ -52,13 +52,33 @@ async function sessionChanged(){
  if(state.user){
   if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
   await loadRequests();
+  await loadNotifications();
   state.channel=db.channel('market-changes-'+state.user.id)
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
-   .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>loadRequests())
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>{loadRequests();loadNotifications();})
    .subscribe();
   message('حساب متصل شد. فهرست از پایگاه داده خوانده می‌شود.');
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
+async function loadNotifications(){
+ if(!state.user)return;
+ const {data,error}=await db.from('market_notifications').select('id,title,body,kind,is_read,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(30);
+ if(error){message('خواندن اعلان‌ها ناموفق بود: '+friendlyError(error),true);return;}
+ const list=$('#notificationsList');list.replaceChildren();
+ const items=data||[];
+ $('#unreadCount').textContent='('+fa(items.filter(x=>!x.is_read).length)+' خوانده‌نشده از ۳۰ اعلان اخیر)';
+ if(!items.length){const p=document.createElement('p');p.className='live-muted';p.textContent='هنوز اعلانی دریافت نکرده‌اید.';list.appendChild(p);return;}
+ for(const n of items){
+  const card=document.createElement('div');card.className='live-offer';
+  const heading=document.createElement('strong');heading.textContent=n.title+(n.is_read?'':' • جدید');
+  const body=document.createElement('p');body.textContent=n.body;
+  const time=document.createElement('small');time.className='live-muted';time.textContent=new Date(n.created_at).toLocaleString('fa-IR');
+  card.append(heading,body,time);
+  if(!n.is_read){const btn=document.createElement('button');btn.type='button';btn.className='live-btn live-outline';btn.textContent='خوانده شد';btn.onclick=async()=>{btn.disabled=true;const {error}=await db.rpc('market_mark_notification_read',{p_id:n.id});if(error){btn.disabled=false;message(friendlyError(error),true);}else await loadNotifications();};card.appendChild(btn);}
+  list.appendChild(card);
+ }
+}
+$('#refreshNotifications').onclick=loadNotifications;
 const categories={digital:'موبایل و دیجیتال',car:'خودرو',gold:'طلا',property:'ملک',construction:'مصالح ساختمانی',service:'خدمات'};
 const requestStatus=r=>r.status==='closed'?'بسته‌شده':new Date(r.deadline)<=new Date()?'مهلت تمام‌شده':'فعال';
 const due=x=>{const n=new Date(x).getTime()-Date.now();return n<=0?'مهلت تمام شده':Math.ceil(n/86400000)+' روز باقی مانده';};
