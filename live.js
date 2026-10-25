@@ -58,6 +58,7 @@ async function sessionChanged(){
   message('حساب متصل شد. درخواست‌ها از پایگاه داده خوانده می‌شوند.');
   await loadRequests();
   await loadNotifications();
+  await loadSupport();
   await loadAdmin();
   state.channel=db.channel('market-changes-'+state.user.id)
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
@@ -103,8 +104,62 @@ async function loadAdmin(){
   list.appendChild(box);
  }
  if(!requests?.length)list.textContent='درخواستی ثبت نشده است.';
+ await loadAdminSupport();
 }
 $('#adminRefresh').onclick=loadAdmin;
+async function loadSupport(){
+ if(!state.user)return;
+ const list=$('#mySupportList');
+ const {data,error}=await db.from('market_support_tickets').select('id,subject,status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(15);
+ if(error){message('دریافت پیام‌های پشتیبانی ناموفق بود: '+friendlyError(error),true);return;}
+ list.replaceChildren();
+ if(!data?.length){list.textContent='هنوز پیامی برای پشتیبانی ارسال نکرده‌اید.';return;}
+ for(const t of data){
+  const row=document.createElement('div');row.className='live-offer';
+  const heading=document.createElement('strong');heading.textContent=t.subject;
+  const label=document.createElement('p');label.className='live-muted';label.textContent=(t.status==='closed'?'بررسی بسته شده':'در انتظار بررسی')+' · '+new Date(t.created_at).toLocaleString('fa-IR');
+  row.append(heading,label);list.appendChild(row);
+ }
+}
+async function loadAdminSupport(){
+ const list=$('#adminSupportList');list.replaceChildren();
+ const {data,error}=await db.rpc('market_admin_support_tickets');
+ if(error){list.textContent='دریافت پیام‌های مدیریت ممکن نشد.';message('دریافت پیام‌های پشتیبانی مدیریت ناموفق بود: '+friendlyError(error),true);return;}
+ if(!data?.length){list.textContent='هنوز پیامی ثبت نشده است.';return;}
+ for(const t of data){
+  const row=document.createElement('div');row.className='live-offer';
+  const heading=document.createElement('strong');heading.textContent=t.subject;
+  const body=document.createElement('p');body.textContent=t.body;body.style.whiteSpace='pre-wrap';
+  const label=document.createElement('p');label.className='live-muted';label.textContent=(t.status==='closed'?'بسته شده':'باز')+' · '+new Date(t.created_at).toLocaleString('fa-IR');
+  row.append(heading,body,label);
+  if(t.status==='open'){
+   const btn=document.createElement('button');btn.className='live-btn live-outline';btn.textContent='بستن پس از بررسی';btn.type='button';
+   btn.onclick=async()=>{
+    if(!confirm('پس از رسیدگی، این پیام بسته شود؟'))return;
+    btn.disabled=true;
+    const {error}=await db.rpc('market_admin_resolve_ticket',{p_ticket_id:t.id});
+    if(error){message('بستن پیام ناموفق بود: '+friendlyError(error),true);btn.disabled=false;return;}
+    message('پیام پشتیبانی بسته شد.');await loadAdminSupport();
+   };row.appendChild(btn);
+  }
+  list.appendChild(row);
+ }
+}
+$('#supportForm').onsubmit=async ev=>{
+ ev.preventDefault();
+ if(!state.user){message('برای ارسال گزارش وارد حساب شوید.',true);return;}
+ const form=ev.currentTarget,button=form.querySelector('button[type="submit"]');
+ const subject=$('#supportSubject').value.trim(),body=$('#supportBody').value.trim();
+ if(subject.length<5||subject.length>150||body.length<15||body.length>2000){message('موضوع یا شرح پیام معتبر نیست.',true);return;}
+ button.disabled=true;
+ try{
+  const {error}=await db.from('market_support_tickets').insert({user_id:state.user.id,subject,body});
+  if(error)throw error;
+  form.reset();message('پیام شما ثبت شد و برای بررسی در پنل مدیریت قرار گرفت.');
+  await loadSupport();
+ }catch(error){message('ارسال پیام ناموفق بود: '+friendlyError(error),true);}
+ finally{button.disabled=false;}
+};
 async function loadNotifications(){
  if(!state.user)return;
  const {data,error}=await db.from('market_notifications').select('id,title,body,kind,is_read,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(30);
