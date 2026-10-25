@@ -24,6 +24,8 @@ function setAuthMode(signup){
 $('#tabLogin').addEventListener('click',()=>setAuthMode(false));
 $('#tabSignup').addEventListener('click',()=>setAuthMode(true));
 setAuthMode(true);
+const preferredRole=new URLSearchParams(location.search).get('role');
+if(preferredRole==='buyer'||preferredRole==='seller')$('#accountRole').value=preferredRole;
 const config=window.GHEIMATYAR_SUPABASE||{};
 if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.url||'')||!config.key||!window.supabase){
  message('زیرساخت نسخه واقعی هنوز متصل نشده است. پس از ایجاد پروژه Supabase، آدرس و کلید عمومی در supabase-config.js تنظیم می‌شود.',true);$('#authSubmit').disabled=true;return;
@@ -31,17 +33,18 @@ if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(config.url||'')||!config.key||!w
 state.client=window.supabase.createClient(config.url,config.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const db=state.client;
 async function getProfile(){
- if(!state.user){state.profile=null;return;}
+ if(!state.user){state.profile=null;return false;}
  const {data,error}=await db.from('market_profiles').select('id,display_name,city,role,business_name,business_description,contact_phone').eq('id',state.user.id).single();
- if(error){message('خواندن حساب کاربری ممکن نشد: '+error.message,true);return;}
+ if(error){state.profile=null;message('خواندن حساب کاربری ممکن نشد: '+error.message,true);return false;}
  state.profile=data;
  $('#profileName').value=data.display_name||'';$('#profileCity').value=data.city||'';$('#profileBusiness').value=data.business_name||'';$('#profileDescription').value=data.business_description||'';$('#profilePhone').value=data.contact_phone||'';
+ return true;
 }
 async function sessionChanged(){
  const {data:{session},error}=await db.auth.getSession();
  if(error)message(error.message,true);
  state.user=session?.user||null;
- await getProfile();
+ const profileReady=await getProfile();
  $('#authPanel').classList.toggle('live-hidden',!!state.user||state.recovery);
  $('#marketPanel').classList.toggle('live-hidden',!state.user||state.recovery);
  $('#logout').classList.toggle('live-hidden',!state.user||state.recovery);
@@ -50,7 +53,9 @@ async function sessionChanged(){
  if(state.channel){await db.removeChannel(state.channel);state.channel=null;}
  if(state.recovery){message('رمز عبور جدید را وارد کنید.');return;}
  if(state.user){
+  if(!profileReady){message('حساب متصل شد، اما دریافت پروفایل ممکن نیست. لطفاً صفحه را دوباره بارگذاری کنید.',true);return;}
   if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
+  message('حساب متصل شد. درخواست‌ها از پایگاه داده خوانده می‌شوند.');
   await loadRequests();
   await loadNotifications();
   await loadAdmin();
@@ -58,7 +63,6 @@ async function sessionChanged(){
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>{loadRequests();loadNotifications();})
    .subscribe();
-  message('حساب متصل شد. فهرست از پایگاه داده خوانده می‌شود.');
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
 async function loadAdmin(){
