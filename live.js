@@ -379,6 +379,7 @@ $('#authForm').onsubmit=async ev=>{
  const button=$('#authSubmit');button.disabled=true;
  try{
   if(state.signup){
+   if(!$('#acceptTerms').checked){message('برای ساخت حساب، شرایط استفاده و حریم خصوصی را مطالعه و تأیید کنید.',true);return;}
    const name=$('#displayName').value.trim(),city=$('#accountCity').value.trim(),role=$('#accountRole').value;
    if(name.length<2||city.length<2){message('نام و شهر را وارد کنید.',true);return;}
    const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname+'?afterAuth=1',data:{name,city,role}}});
