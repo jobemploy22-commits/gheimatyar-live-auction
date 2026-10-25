@@ -13,9 +13,11 @@
   };
   const state = { requests: [], count: 0, filter: 'all', query: '', loading: true, error: '' };
   const fmt = (n) => Number(n).toLocaleString('fa-IR');
-  const goMarket = (role) => {
-    const suffix = role === 'seller' || role === 'buyer' ? '?role=' + encodeURIComponent(role) : '';
-    window.location.assign('./live.html' + suffix);
+  const goMarket = (role, requestId) => {
+    const params = new URLSearchParams();
+    if (role === 'seller' || role === 'buyer') params.set('role', role);
+    if (requestId && /^[0-9a-f-]{36}$/i.test(requestId)) params.set('request', requestId);
+    window.location.assign('./live.html' + (params.toString() ? '?' + params.toString() : ''));
   };
   const elem = (tag, cls, content) => {
     const node = document.createElement(tag);
@@ -45,7 +47,7 @@
     const days = Math.max(0, Math.ceil((new Date(request.deadline).getTime() - Date.now()) / 86400000));
     const button = elem('button', 'primary-btn', 'مشاهده و ثبت پیشنهاد');
     button.type = 'button';
-    button.addEventListener('click', () => goMarket('seller'));
+    button.addEventListener('click', () => goMarket('seller', request.id));
     add(bottom, elem('span', 'time', fmt(days) + ' روز تا پایان'), button);
     return add(item, top, title, summary, meta, detail, bottom);
   }
