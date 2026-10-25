@@ -57,15 +57,72 @@ async function sessionChanged(){
   if(new URLSearchParams(location.search).has('afterAuth')){history.replaceState(null,'',location.pathname);message('ایمیل شما تأیید شد؛ به بازار واقعی قیمت‌یار خوش آمدید.');}
   message('حساب متصل شد. درخواست‌ها از پایگاه داده خوانده می‌شوند.');
   await loadRequests();
+  await loadAwards();
   await loadNotifications();
   await loadSupport();
   await loadAdmin();
   state.channel=db.channel('market-changes-'+state.user.id)
-   .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>loadRequests())
+   .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>{loadRequests();loadAwards();loadNotifications();})
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>{loadRequests();loadNotifications();})
    .subscribe();
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
+
+async function showAwardMessages(requestId,target){
+ target.replaceChildren();
+ const {data,error}=await db.from('market_award_messages').select('id,sender_id,body,created_at').eq('request_id',requestId).order('created_at',{ascending:true}).limit(150);
+ if(error){message('دریافت گفت‌وگو ناموفق بود: '+friendlyError(error),true);return;}
+ if(!data?.length){const empty=document.createElement('p');empty.className='live-muted';empty.textContent='هنوز پیامی ثبت نشده است. می‌توانید نخستین پیام هماهنگی را ارسال کنید.';target.appendChild(empty);return;}
+ for(const m of data){
+  const row=document.createElement('div');row.className='live-offer';
+  if(m.sender_id===state.user.id)row.style.borderInlineStart='3px solid #3150d8';
+  const sender=document.createElement('strong');sender.textContent=m.sender_id===state.user.id?'شما':'طرف مقابل';
+  const body=document.createElement('p');body.textContent=m.body;body.style.whiteSpace='pre-wrap';body.style.overflowWrap='anywhere';
+  const time=document.createElement('small');time.className='live-muted';time.textContent=new Date(m.created_at).toLocaleString('fa-IR');
+  row.append(sender,body,time);target.appendChild(row);
+ }
+}
+async function loadAwards(){
+ if(!state.user)return;
+ const list=$('#myAwardsList');list.replaceChildren();
+ const {data,error}=await db.rpc('market_get_my_awards');
+ if(error){list.textContent='دریافت انتخاب‌های نهایی ممکن نشد.';message('دریافت انتخاب‌های نهایی ناموفق بود: '+friendlyError(error),true);return;}
+ if(!data?.length){list.textContent='هنوز پیشنهاد برنده‌ای برای حساب شما ثبت نشده است.';return;}
+ for(const a of data){
+  const card=document.createElement('div');card.className='live-offer';
+  const title=document.createElement('strong');title.textContent=a.request_title;
+  const details=document.createElement('p');details.className='live-muted';details.textContent='پیشنهاد منتخب: '+a.seller_name+' | '+fa(a.price)+' تومان | تحویل '+fa(a.delivery_days)+' روزه';
+  const toggle=document.createElement('button');toggle.className='live-btn live-outline';toggle.type='button';toggle.textContent='باز کردن گفت‌وگوی خصوصی';
+  const wrap=document.createElement('div');wrap.className='live-hidden';wrap.style.marginTop='12px';
+  const messages=document.createElement('div');messages.setAttribute('aria-live','polite');
+  const refresh=document.createElement('button');refresh.type='button';refresh.className='live-btn live-outline';refresh.textContent='به‌روزرسانی پیام‌ها';
+  refresh.onclick=()=>showAwardMessages(a.request_id,messages);
+  const form=document.createElement('form');form.style.marginTop='12px';
+  const label=document.createElement('label');label.className='live-label';label.textContent='پیام به طرف مقابل';
+  const textarea=document.createElement('textarea');textarea.className='live-input';textarea.required=true;textarea.minLength=2;textarea.maxLength=1500;textarea.rows=3;textarea.placeholder='برای هماهنگی جزئیات معامله پیام بنویسید؛ اطلاعات محرمانه یا بانکی ارسال نکنید.';
+  const submit=document.createElement('button');submit.className='live-btn';submit.type='submit';submit.textContent='ارسال پیام';
+  form.append(label,textarea,submit);
+  form.onsubmit=async e=>{
+   e.preventDefault();
+   const body=textarea.value.trim();
+   if(body.length<2||body.length>1500){message('طول پیام معتبر نیست.',true);return;}
+   submit.disabled=true;
+   const {error}=await db.from('market_award_messages').insert({request_id:a.request_id,sender_id:state.user.id,body});
+   if(error){message('ارسال پیام ناموفق بود: '+friendlyError(error),true);}
+   else{textarea.value='';await showAwardMessages(a.request_id,messages);message('پیام خصوصی ارسال شد.');}
+   submit.disabled=false;
+  };
+  toggle.onclick=async()=>{
+   const opening=wrap.classList.contains('live-hidden');
+   wrap.classList.toggle('live-hidden',!opening);
+   toggle.textContent=opening?'بستن گفت‌وگو':'باز کردن گفت‌وگوی خصوصی';
+   if(opening)await showAwardMessages(a.request_id,messages);
+  };
+  wrap.append(messages,refresh,form);card.append(title,details,toggle,wrap);list.appendChild(card);
+ }
+}
+$('#refreshAwards').onclick=loadAwards;
+
 async function loadAdmin(){
  const panel=$('#adminPanel');
  if(!state.user){panel.classList.add('live-hidden');return;}
@@ -267,7 +324,7 @@ async function openOffers(r,el){
  for(const [i,o] of (data||[]).entries()){
   const row=document.createElement('div');row.className='live-offer';if(!seller&&i===0){row.style.borderColor='#11b69d';row.style.borderWidth='2px';}
   row.innerHTML=(!seller&&i===0?'<strong style="color:#07876f">کمترین قیمت پیشنهادی</strong><div></div>':'')+'<strong>'+esc(o.seller_name)+'</strong> · '+esc(o.seller_city)+' <div class="live-price">'+fa(o.price)+' تومان</div><span class="live-muted">تحویل: '+fa(o.delivery_days)+' روز · '+esc(o.notes)+'</span>';
-  if(!seller&&r.buyer_id===state.user.id&&r.status==='open'&&!awarded){const select=document.createElement('button');select.className='live-btn';select.type='button';select.textContent='انتخاب این پیشنهاد به‌عنوان برنده';select.style.marginTop='10px';select.onclick=async()=>{if(!confirm('با انتخاب این پیشنهاد، درخواست بسته می‌شود. این اقدام قابل بازگشت نیست. تأیید می‌کنید؟'))return;select.disabled=true;const {error}=await db.rpc('market_award_request',{p_request_id:r.id,p_offer_id:o.id});if(error){select.disabled=false;message('انتخاب پیشنهاد ناموفق بود: '+friendlyError(error),true);return;}message('پیشنهاد برنده با موفقیت ثبت شد.');await loadRequests();};row.appendChild(select);}
+  if(!seller&&r.buyer_id===state.user.id&&r.status==='open'&&!awarded){const select=document.createElement('button');select.className='live-btn';select.type='button';select.textContent='انتخاب این پیشنهاد به‌عنوان برنده';select.style.marginTop='10px';select.onclick=async()=>{if(!confirm('با انتخاب این پیشنهاد، درخواست بسته می‌شود. این اقدام قابل بازگشت نیست. تأیید می‌کنید؟'))return;select.disabled=true;const {error}=await db.rpc('market_award_request',{p_request_id:r.id,p_offer_id:o.id});if(error){select.disabled=false;message('انتخاب پیشنهاد ناموفق بود: '+friendlyError(error),true);return;}message('پیشنهاد برنده با موفقیت ثبت شد. هماهنگی خصوصی اکنون در بخش انتخاب‌های نهایی در دسترس است.');await Promise.all([loadRequests(),loadAwards(),loadNotifications()]);};row.appendChild(select);}
   list.appendChild(row);
  }
  el.appendChild(list);
