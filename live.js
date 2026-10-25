@@ -205,6 +205,14 @@ async function loadRequests(){
   card.innerHTML='<div class="live-status">'+esc(categories[r.category]||r.category)+' | '+esc(r.city)+' | وضعیت: '+esc(requestStatus(r))+' | '+esc(due(r.deadline))+'</div><h3>'+esc(r.title)+'</h3><p>'+esc(r.description)+'</p><p class="live-price">'+fa(r.budget)+' تومان <small class="live-muted">سقف بودجه</small></p><div class="live-actions"></div><div class="offer-area"></div>';
   const actions=card.querySelector('.live-actions');
   const btn=document.createElement('button');btn.className='live-btn live-outline';btn.textContent=state.profile?.role==='seller'?'ثبت پیشنهاد':'بررسی پیشنهادهای من';
+  const report=document.createElement('button');report.type='button';report.className='live-btn live-outline';report.textContent='گزارش درخواست';
+  report.onclick=()=>{
+   $('#supportSubject').value='گزارش درخواست: '+r.title.slice(0,120);
+   $('#supportBody').value='شناسه درخواست: '+r.id+'\nدلیل گزارش: ';
+   $('#supportSection').scrollIntoView({behavior:'smooth',block:'start'});
+   $('#supportBody').focus();
+  };
+  actions.appendChild(report);
   const owner=r.buyer_id===state.user.id;
   if(state.profile?.role==='seller'||owner){btn.addEventListener('click',()=>openOffers(r,card.querySelector('.offer-area')));actions.appendChild(btn);}
   if(owner&&r.status==='open'&&new Date(r.deadline)>new Date()){
