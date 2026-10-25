@@ -140,8 +140,14 @@
     render(); goRequests();
   });
   $('#sortSelect')?.addEventListener('change', render);
-  for (const id of ['demoLoginBtn','notificationsBtn','mobileNotifications','mobileProfile','newRequestHero','newRequestSection','newRequestBottom','mobileNewRequest','emptyNewRequest','heroOffersBtn','vipBtn']) {
+  for (const id of ['demoLoginBtn','notificationsBtn','mobileNotifications','mobileProfile']) {
     $('#' + id)?.addEventListener('click', () => goMarket());
+  }
+  for (const id of ['newRequestHero','newRequestSection','newRequestBottom','mobileNewRequest','emptyNewRequest']) {
+    $('#' + id)?.addEventListener('click', () => goMarket('buyer'));
+  }
+  for (const id of ['heroOffersBtn','vipBtn']) {
+    $('#' + id)?.addEventListener('click', () => goMarket('seller'));
   }
   $$('[data-role]').forEach(button => button.addEventListener('click', () => goMarket(button.dataset.role)));
   $('#mobileMenuBtn')?.addEventListener('click', () => $('.mobile-nav')?.classList.toggle('open'));
