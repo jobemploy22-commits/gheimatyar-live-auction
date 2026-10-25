@@ -65,6 +65,7 @@ async function sessionChanged(){
   state.channel=db.channel('market-changes-'+state.user.id)
    .on('postgres_changes',{event:'*',schema:'public',table:'market_requests'},()=>{loadRequests();loadAwards();loadNotifications();})
    .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_offers'},()=>{loadRequests();loadNotifications();})
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'market_notifications',filter:'user_id=eq.'+state.user.id},()=>{loadNotifications();loadAwards();loadSupport();})
    .subscribe();
  }else message('برای ثبت درخواست یا پیشنهاد واقعی، وارد حساب شوید.');
 }
@@ -168,7 +169,7 @@ $('#adminRefresh').onclick=loadAdmin;
 async function loadSupport(){
  if(!state.user)return;
  const list=$('#mySupportList');
- const {data,error}=await db.from('market_support_tickets').select('id,subject,status,created_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(15);
+ const {data,error}=await db.from('market_support_tickets').select('id,subject,status,created_at,admin_reply,replied_at').eq('user_id',state.user.id).order('created_at',{ascending:false}).limit(15);
  if(error){message('دریافت پیام‌های پشتیبانی ناموفق بود: '+friendlyError(error),true);return;}
  list.replaceChildren();
  if(!data?.length){list.textContent='هنوز پیامی برای پشتیبانی ارسال نکرده‌اید.';return;}
@@ -176,7 +177,9 @@ async function loadSupport(){
   const row=document.createElement('div');row.className='live-offer';
   const heading=document.createElement('strong');heading.textContent=t.subject;
   const label=document.createElement('p');label.className='live-muted';label.textContent=(t.status==='closed'?'بررسی بسته شده':'در انتظار بررسی')+' · '+new Date(t.created_at).toLocaleString('fa-IR');
-  row.append(heading,label);list.appendChild(row);
+  row.append(heading,label);
+  if(t.admin_reply){const answer=document.createElement('p');answer.textContent='پاسخ پشتیبانی: '+t.admin_reply;answer.style.whiteSpace='pre-wrap';answer.style.overflowWrap='anywhere';row.appendChild(answer);}
+  list.appendChild(row);
  }
 }
 async function loadAdminSupport(){
@@ -199,6 +202,23 @@ async function loadAdminSupport(){
     if(error){message('بستن پیام ناموفق بود: '+friendlyError(error),true);btn.disabled=false;return;}
     message('پیام پشتیبانی بسته شد.');await loadAdminSupport();
    };row.appendChild(btn);
+   const replyBtn=document.createElement('button');replyBtn.className='live-btn';replyBtn.type='button';replyBtn.textContent='پاسخ به کاربر';
+   const replyForm=document.createElement('form');replyForm.className='live-hidden';replyForm.style.marginTop='10px';
+   const replyLabel=document.createElement('label');replyLabel.className='live-label';replyLabel.textContent='متن پاسخ پشتیبانی';
+   const replyText=document.createElement('textarea');replyText.className='live-input';replyText.minLength=10;replyText.maxLength=1500;replyText.required=true;replyText.rows=4;replyText.placeholder='پاسخ مناسب برای کاربر بنویسید. پیام در حساب او نمایش داده می‌شود.';
+   const send=document.createElement('button');send.className='live-btn';send.type='submit';send.textContent='ارسال پاسخ و بستن درخواست';
+   replyForm.append(replyLabel,replyText,send);
+   replyBtn.onclick=()=>replyForm.classList.toggle('live-hidden');
+   replyForm.onsubmit=async ev=>{
+    ev.preventDefault();const reply=replyText.value.trim();
+    if(reply.length<10||reply.length>1500){message('پاسخ باید بین ۱۰ تا ۱۵۰۰ کاراکتر باشد.',true);return;}
+    send.disabled=true;
+    const {error}=await db.rpc('market_admin_reply_ticket',{p_ticket_id:t.id,p_reply:reply});
+    if(error){send.disabled=false;message('ارسال پاسخ ناموفق بود: '+friendlyError(error),true);return;}
+    message('پاسخ ثبت شد و برای کاربر اعلان ارسال شد.');
+    await loadAdminSupport();
+   };
+   row.append(replyBtn,replyForm);
   }
   list.appendChild(row);
  }
