@@ -1,7 +1,8 @@
 (()=>{
 'use strict';
 const $=s=>document.querySelector(s);
-const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null,recovery:false};
+const state={client:null,user:null,profile:null,requests:[],mode:'all',signup:true,channel:null,recovery:false,linkOpened:false};
+const requestLinkId=(()=>{const id=new URLSearchParams(location.search).get('request');return id&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)?id:null;})();
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa=n=>Number(n).toLocaleString('fa-IR');
 function friendlyError(err){
@@ -247,6 +248,12 @@ async function loadRequests(){
  const {data,error}=await q;
  if(error){message('خطای دریافت درخواست‌ها: '+error.message,true);return;}
  state.requests=data||[];
+ if(requestLinkId&&state.mode==='all'&&!state.requests.some(r=>r.id===requestLinkId)){
+  const {data:linked}=await db.from('market_requests')
+   .select('id,buyer_id,title,category,city,description,budget,deadline,status,created_at')
+   .eq('id',requestLinkId).eq('status','open').gt('deadline',new Date().toISOString()).maybeSingle();
+  if(linked)state.requests.unshift(linked);
+ }
  const list=$('#requestList');list.replaceChildren();
  const dash=$('#dashboard');dash.replaceChildren();
  const summary=[['نقش حساب',state.profile?.role==='seller'?'فروشنده':'خریدار'],['درخواست‌های این بخش',fa(state.requests.length)],['نمایش',state.mode==='mine'?'درخواست‌های من':'درخواست‌های فعال']];
@@ -307,6 +314,13 @@ async function loadRequests(){
    close.onclick=async()=>{if(!confirm('این درخواست بسته شود؟'))return;const {error}=await db.rpc('market_close_request',{p_request_id:r.id});if(error)message(error.message,true);else{message('درخواست بسته شد.');loadRequests();}};actions.appendChild(close);
   }
   list.appendChild(card);
+  if(requestLinkId===r.id&&!state.linkOpened){
+   state.linkOpened=true;
+   setTimeout(()=>{
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    if(state.profile?.role==='seller')btn.click();
+   },120);
+  }
  }
 }
 async function openOffers(r,el){
