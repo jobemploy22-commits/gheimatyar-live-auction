@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://gheimatyar.famgroupofficial.com/sitemap.xml
